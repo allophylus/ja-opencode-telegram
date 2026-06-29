@@ -1,6 +1,7 @@
-# ja-opencode-telegram
-
 node_modules/
+dist/
 .env
-.venv
-__pycache__/
+src/*.js
+!src/*.example.*
+state.json
+bot.lock
