@@ -1,0 +1,6 @@
+# ja-opencode-telegram
+
+node_modules/
+.env
+.venv
+__pycache__/
