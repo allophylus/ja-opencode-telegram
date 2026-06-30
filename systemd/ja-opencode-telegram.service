@@ -1,0 +1,20 @@
+[Unit]
+Description=JA OpenCode Telegram Bot (grinev wrapper)
+After=network-online.target opencode-serve.service
+Wants=network-online.target opencode-serve.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/fen/1-Projects/ja-opencode-telegram
+EnvironmentFile=/home/fen/.config/opencode-telegram-bot/.env
+Environment=NODE_PATH=/home/fen/.npm-global/lib/node_modules/@grinev/opencode-telegram-bot/node_modules
+Environment=TELEGRAM_FORCE_IPV4=true
+Environment=OPENCODE_AUTO_RESTART_ENABLED=false
+ExecStart=/usr/bin/node --dns-result-order=ipv4first /home/fen/1-Projects/ja-opencode-telegram/grinev-runner.cjs
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

@@ -117,3 +117,26 @@ ja-opencode-telegram/
 If you find this bot useful, consider buying me a coffee ☕
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mrdom78)
+
+## Auto-Start on Reboot
+
+Both services are managed via systemd user units:
+
+```bash
+# Enable services (start on boot)
+systemctl --user enable opencode-serve
+systemctl --user enable ja-opencode-telegram
+
+# Start now
+systemctl --user start opencode-serve
+systemctl --user start ja-opencode-telegram
+
+# Check status
+systemctl --user status opencode-serve
+systemctl --user status ja-opencode-telegram
+
+# View logs
+journalctl --user -u ja-opencode-telegram -n 50 --no-pager
+```
+
+Service files are in the `systemd/` directory of this repo.
