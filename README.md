@@ -1,181 +1,127 @@
 # JA OpenCode Telegram 🤖
 
-A Telegram remote control plugin for [OpenCode](https://opencode.ai). Replace the buggy `@coinseeker/opencode-telegram-plugin` with something that actually handles permissions, shows usage, and doesn't crash on polling conflicts.
+Chat with OpenCode from Telegram. Send prompts, switch models, attach files.
 
-## Features
+## How it works
 
-- **Remote Control** — Send any message to Telegram → it reaches OpenCode via `opencode --prompt`
-- **Model Switching** — `/model <name>` switches models without editing config files
-- **Permission Approval** — Inline buttons in Telegram: Allow Once / Always Allow / Reject
-- **Token Tracking** — `/stats` shows token usage & cost; model + token context on every response
-- **Health Check** — `/health` shows PID, active model, server time, token stats
-- **Session Management** — `/sessions` list, `/status <id>` details, `/cancel`
-- **No 409 Conflicts** — Single polling loop, no overlap with MCP servers
+```
+Telegram ──► ja-opencode-telegram ──► opencode serve (:4096)
+```
 
-## Prerequisites
+This bot runs **alongside** `opencode serve` on your MacBook. It listens for your Telegram messages, forwards them to OpenCode via its REST API, and sends responses back.
 
-### 1. Create a Telegram Bot
+## Setup
 
-1. Open Telegram and search for [@BotFather](https://t.me/botfather)
-2. Send `/newbot` and follow the prompts:
-   - Choose a name (e.g. `My OpenCode Bot`)
-   - Choose a username ending in `bot` (e.g. `my_opencode_bot`)
-3. BotFather gives you an **API token** — save it (looks like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
-4. (Optional but recommended) Send `/setprivacy` to @BotFather and set to **Disabled** so your bot can see all messages in groups
+### 1. Prerequisites
 
-### 2. Find Your Telegram User ID
+- Node.js 20+
+- `opencode` CLI installed
+- `opencode serve` running (the bot talks to this)
 
-Send `/start` to [@userinfobot](https://t.me/userinfobot) — it replies with your numeric user ID (e.g. `123456789`). This goes into the allowlist.
-
----
-
-## Quick Start
-
-### 1. Install
+### 2. Install
 
 ```bash
-mkdir -p ~/.config/opencode/plugins
-cp src/telegram-remote.js ~/.config/opencode/plugins/
+cd ja-opencode-telegram
+npm install
+```
+
+### 3. Create a Telegram Bot
+
+1. Message [@BotFather](https://t.me/botfather) on Telegram
+2. Send `/newbot` and choose a name/username
+3. Save the API token
+
+### 4. Get Your User ID
+
+Message [@userinfobot](https://t.me/userinfobot) — it replies with your numeric ID.
+
+### 5. Configure
+
+```bash
+mkdir -p ~/.config/opencode/telegram-remote
 cp .env.example ~/.config/opencode/telegram-remote/.env
 ```
 
-### 2. Configure
-
 Edit `~/.config/opencode/telegram-remote/.env`:
 
-```env
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_ALLOWED_USER_IDS=your_telegram_user_id
+```
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_ALLOWED_USER_IDS=your_telegram_id
 ```
 
-### 3. Update opencode.json
+### 6. Run
 
-```json
-{
-  "plugin": [
-    "file:///home/you/.config/opencode/plugins/ja-opencode-telegram.js"
-  ],
-  "mcp": {
-    "telegram": {
-      "enabled": false
-    }
-  }
-}
-```
-
-Disable any other Telegram MCP server — they conflict on the same bot token.
-
-### 4. Restart OpenCode
-
+**Terminal 1** — Start OpenCode server:
 ```bash
-kill $(pgrep opencode)
-opencode
+opencode serve
 ```
 
-### 5. Message your bot
+**Terminal 2** — Start the bot:
+```bash
+cd ja-opencode-telegram
+npm start
+```
 
-Send `/start` to the Telegram bot. It'll auto-detect your chat and respond.
+Or for development:
+```bash
+npm run dev
+```
 
----
+### 7. Test
+
+Open Telegram, find your bot, send `/start`. You're connected.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/help` | Show this help |
+| `/new [title]` | Create a new session |
+| `/sessions` | List sessions |
+| `/session <id>` | Switch to a session |
+| `/model [name]` | Show or set model |
 | `/models` | List available models |
-| `/model <key>` | Switch model (e.g. `deepseek-v4-free`, `claude-sonnet`) |
-| `/sessions` | List recent OpenCode sessions |
-| `/status <id>` | Get session details |
-| `/stats` | Show token usage and cost |
-| `/health` | System health (PID, model, stats) |
-| `/config` | Show current model |
-| `/cancel` | Cancel current operation |
-| *any text* | Forward to OpenCode as a prompt |
+| `/abort` | Cancel current task |
+| `/projects` | List projects |
+| `/ls [path]` | Browse files |
+| `/cat <path>` | Read a file |
+| `/status` | Current session/model |
+| `/health` | Connection status |
+| `/help` | Command reference |
+| *any text* | Send to OpenCode as prompt |
 
-## Models
+Model shortcuts:
+- `deepseek-v4-free` → DeepSeek V4 Flash Free
+- `claude-sonnet` → Claude Sonnet 4
+- `claude-haiku` → Claude Haiku 4.5
+- `gemini-flash` → Gemini 3 Flash
+- `gpt-5` → GPT-5
 
-Models are loaded **dynamically** from `opencode models` at runtime — up-to-date with whatever OpenCode supports.
+## Sending Files
 
-Built-in shortcut aliases:
-- `deepseek-v4-free` → `opencode/deepseek-v4-flash-free`
-- `deepseek-v4-flash` → `opencode/deepseek-v4-flash`
-- `deepseek-v4-pro` → `opencode/deepseek-v4-pro`
-- `claude-sonnet` → `opencode/claude-sonnet-4`
-- `claude-haiku` → `opencode/claude-haiku-4-5`
-- `claude-opus` → `opencode/claude-opus-4-7`
-- `gpt-5` → `opencode/gpt-5`
-- `gemini-flash` → `opencode/gemini-3-flash`
+Send any **document** or **photo** with an optional caption. The bot:
 
-Use `/models` to list every available model.
-Use `/model <alias_or_id>` to switch — accepts full IDs or shortcuts.
+1. Downloads the file from Telegram
+2. Saves it to `~/.opencode-attachments/`
+3. Sends the prompt + file path to OpenCode
 
-## Architecture
+## File Structure
 
 ```
-Telegram ──► Plugin (long poll) ──► opencode --prompt "..." ──► Response
-                 │                                              │
-                 └── Hook: event, permission.ask ───────────────┘
+ja-opencode-telegram/
+├── src/
+│   ├── index.ts        — Entry point
+│   ├── config.ts       — Config + state management
+│   ├── opencode.ts     — OpenCode API client
+│   └── bot.ts          — Telegram bot and all handlers
+├── dist/               — Compiled JavaScript
+├── .env.example        — Config template
+├── package.json
+└── tsconfig.json
 ```
 
-The plugin runs inside OpenCode via the Plugin API. It:
-1. Polls Telegram for messages from allowed user IDs
-2. Forwards text to `opencode --prompt` via BunShell
-3. Intercepts `permission.ask` hooks → sends inline buttons to Telegram → blocks until decision
-4. Reports session completion events to Telegram
-5. Appends model + token stats to every response
-
-## Configuration
-
-### `~/.config/opencode/telegram-remote/.env`
-Bot token and user allowlist. See `.env.example`.
-
-### Models
-Models are loaded **dynamically** from `opencode models` at runtime — no config file needed.
-
-Shortcut aliases are built into the plugin:
-- `deepseek-v4-free` → `opencode/deepseek-v4-flash-free`
-- `deepseek-v4-flash` → `opencode/deepseek-v4-flash`
-- `deepseek-v4-pro` → `opencode/deepseek-v4-pro`
-- `claude-sonnet` → `opencode/claude-sonnet-4`
-- `claude-haiku` → `opencode/claude-haiku-4-5`
-- `claude-opus` → `opencode/claude-opus-4-7`
-- `gpt-5` → `opencode/gpt-5`
-- `gemini-flash` → `opencode/gemini-3-flash`
-
-Use `/model <alias>` for shortcuts, or `/model <full_id>` for any model ID.
-The `/models` command always shows the full current list from OpenCode.
-
-### `~/.config/opencode/telegram-remote/state.json`
-Auto-generated — tracks chat ID and polling offset.
-
-## Files
-
-```
-~/.config/opencode/
-├── opencode.json                # Plugin registration
-├── plugins/
-│   └── telegram-remote.js       # Compiled plugin
-├── telegram-remote/
-│   ├── .env                     # Bot token + allowed users
-│   
-│   └── state.json               # Chat ID + polling offset
-└── logs/
-    └── telegram-remote.log      # Debug logging
-```
-
-## Development
+## Building
 
 ```bash
-# Edit source
-vim src/telegram-remote.ts
-
-# Compile
-cd src && npx tsc -p tsconfig.json
-
-# Deploy
-cp src/telegram-remote.js ~/.config/opencode/plugins/
-
-# Restart OpenCode
-kill $(pgrep opencode) && opencode
+npm run build
+node dist/index.js
 ```
