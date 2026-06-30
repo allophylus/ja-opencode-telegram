@@ -77,6 +77,7 @@ Open Telegram, find your bot, send `/start`.
 | `/sessions` | List sessions |
 | `/abort` | Cancel current task |
 | `/projects` | List OpenCode projects |
+| `/about` | About this bot and support the developer |
 | `/help` | All commands |
 
 ## Model Selection
@@ -110,3 +111,9 @@ ja-opencode-telegram/
 **Insufficient Balance**: Top up at your [OpenCode billing page](https://opencode.ai/workspace/wrk_01KVF2HRG3MKQEXQ5YSW6Z10TZ/billing) or switch to a free model via `/model`.
 
 **IPv6 issues**: The VM cannot reach `api.telegram.org` via IPv6. Force IPv4 with `--dns-result-order=ipv4first` and `https.Agent({ family: 4 })`.
+
+## Support
+
+If you find this bot useful, consider buying me a coffee ☕
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mrdom78)

@@ -20,6 +20,7 @@ const COMMAND_DEFINITIONS = [
     { command: "skills", descriptionKey: "cmd.description.skills" },
     { command: "mcps", descriptionKey: "cmd.description.mcps" },
     { command: "model", descriptionKey: "cmd.description.model" },
+    { command: "about", descriptionKey: "cmd.description.about" },
     { command: "opencode_start", descriptionKey: "cmd.description.opencode_start" },
     { command: "opencode_stop", descriptionKey: "cmd.description.opencode_stop" },
     { command: "open", descriptionKey: "cmd.description.open" },
