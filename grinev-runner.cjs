@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ja-opencode-telegram — custom polling bot for @Richard_OC_bot
+ * ja-opencode-telegram — custom polling bot for OpenCode via Telegram
  * Uses raw https.request for getUpdates (avoids grammy v1 409 race condition)
  * Keeps all grinev bot message handlers, middleware, and services intact
  *

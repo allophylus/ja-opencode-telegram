@@ -1,6 +1,6 @@
 # JA OpenCode Telegram 🤖
 
-Chat with OpenCode from Telegram. Currently running using the **grinev** bot (`@Opencode_richard_bot`) with a custom IPv4-safe polling loop.
+Chat with OpenCode from Telegram. Currently running using the **grinev** bot  with a custom IPv4-safe polling loop.
 
 ## How it works
 
