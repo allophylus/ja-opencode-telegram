@@ -124,15 +124,12 @@ Both services are managed via systemd user units:
 
 ```bash
 # Enable services (start on boot)
-systemctl --user enable opencode-serve
 systemctl --user enable ja-opencode-telegram
 
 # Start now
-systemctl --user start opencode-serve
 systemctl --user start ja-opencode-telegram
 
 # Check status
-systemctl --user status opencode-serve
 systemctl --user status ja-opencode-telegram
 
 # View logs
