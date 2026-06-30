@@ -1,132 +1,112 @@
 # JA OpenCode Telegram 🤖
 
-Chat with OpenCode from Telegram. Send prompts, switch models, attach files.
+Chat with OpenCode from Telegram. Currently running using the **grinev** bot (`@Opencode_richard_bot`) with a custom IPv4-safe polling loop.
 
 ## How it works
 
 ```
-Telegram ──► ja-opencode-telegram ──► opencode serve (:4096)
+Telegram ──► grinev-runner.cjs ──► opencode serve (:4096)
 ```
 
-This bot runs **alongside** `opencode serve` on your MacBook. It listens for your Telegram messages, forwards them to OpenCode via its REST API, and sends responses back.
+The `grinev-runner.cjs` script:
+- Wraps `@grinev/opencode-telegram-bot` (grammy v1)
+- Uses raw `https.request` for polling (bypasses grammy's IPv6/Happy Eyeballs issues)
+- Starts `opencode serve` automatically
+- Handles 409 conflicts gracefully
+- Forces IPv4 via `https.Agent({ family: 4 })`
 
 ## Setup
 
 ### 1. Prerequisites
 
 - Node.js 20+
-- `opencode` CLI installed
-- `opencode serve` running (the bot talks to this)
+- `opencode` CLI installed globally
 
-### 2. Install
-
-```bash
-cd ja-opencode-telegram
-npm install
-```
-
-### 3. Create a Telegram Bot
-
-1. Message [@BotFather](https://t.me/botfather) on Telegram
-2. Send `/newbot` and choose a name/username
-3. Save the API token
-
-### 4. Get Your User ID
-
-Message [@userinfobot](https://t.me/userinfobot) — it replies with your numeric ID.
-
-### 5. Configure
+### 2. Install grinev bot
 
 ```bash
-mkdir -p ~/.config/opencode/telegram-remote
-cp .env.example ~/.config/opencode/telegram-remote/.env
+npm install -g @grinev/opencode-telegram-bot@0.22.0
 ```
 
-Edit `~/.config/opencode/telegram-remote/.env`:
+### 3. Create a Telegram Bot via @BotFather
+
+Save the API token.
+
+### 4. Configure
+
+```bash
+mkdir -p ~/.config/opencode-telegram-bot
+cp .env.example ~/.config/opencode-telegram-bot/.env
+```
+
+Edit `~/.config/opencode-telegram-bot/.env`:
 
 ```
-TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_BOT_TOKEN=your…ere
 TELEGRAM_ALLOWED_USER_IDS=your_telegram_id
+OPENCODE_API_URL=http://localhost:4096
+OPENCODE_MODEL_PROVIDER=opencode
+OPENCODE_MODEL_ID=deepseek-v4-flash-free
 ```
 
-### 6. Run
+### 5. Run
 
-**Terminal 1** — Start OpenCode server:
-```bash
-opencode serve
-```
-
-**Terminal 2** — Start the bot:
 ```bash
 cd ja-opencode-telegram
-npm start
+node --dns-result-order=ipv4first grinev-runner.cjs
 ```
 
-Or for development:
+Or via the start script:
+
 ```bash
-npm run dev
+./start.sh
 ```
 
-### 7. Test
+### 6. Test
 
-Open Telegram, find your bot, send `/start`. You're connected.
+Open Telegram, find your bot, send `/start`.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/new [title]` | Create a new session |
+| `/model` | Change AI model (opens selection menu) |
+| `/status` | Bot, session, and model status |
+| `/settings` | Configure bot behavior |
+| `/new` | Create a new session |
 | `/sessions` | List sessions |
-| `/session <id>` | Switch to a session |
-| `/model [name]` | Show or set model |
-| `/models` | List available models |
 | `/abort` | Cancel current task |
-| `/projects` | List projects |
-| `/ls [path]` | Browse files |
-| `/cat <path>` | Read a file |
-| `/status` | Current session/model |
-| `/health` | Connection status |
-| `/help` | Command reference |
-| *any text* | Send to OpenCode as prompt |
+| `/projects` | List OpenCode projects |
+| `/help` | All commands |
 
-Model selection:
-- Use `/model` to see current model
-- Use `/models` to list all available models
-- Send `/model <name>` to switch, e.g. `/model deepseek-v4-flash-free`
+## Model Selection
 
-Model shortcuts:
-- `deepseek-v4-flash-free` → DeepSeek V4 Flash Free (recommended free tier)
-- `claude-sonnet` → Claude Sonnet 4
-- `claude-haiku` → Claude Haiku 4.5
-- `gemini-flash` → Gemini 3 Flash
-- `gpt-5` → GPT-5
+Send `/model` to see the current model and pick a new one from favorites/recent, or search all available models.
 
-## Sending Files
-
-Send any **document** or **photo** with an optional caption. The bot:
-
-1. Downloads the file from Telegram
-2. Saves it to `~/.opencode-attachments/`
-3. Sends the prompt + file path to OpenCode
+Free models available under provider `opencode`:
+- `deepseek-v4-flash-free` — DeepSeek V4 Flash
+- `mimo-v2.5-free` — MiniMax Mimo
+- `nemotron-3-ultra-free` — NVIDIA Nemotron
+- `north-mini-code-free`
 
 ## File Structure
 
 ```
 ja-opencode-telegram/
-├── src/
-│   ├── index.ts        — Entry point
-│   ├── config.ts       — Config + state management
-│   ├── opencode.ts     — OpenCode API client
-│   └── bot.ts          — Telegram bot and all handlers
-├── dist/               — Compiled JavaScript
-├── .env.example        — Config template
+├── grinev-runner.cjs    ← Current running bot (grinev wrapper)
+├── start.sh              ← Start script
+├── telegram-proxy.cjs    ← IPv4 proxy (alternative approach)
+├── src/                  ← TypeScript bot (legacy/alternative)
+├── dist/                 ← Compiled TS bot
+├── .env.example          ← Config template
 ├── package.json
-└── tsconfig.json
+└── README.md
 ```
 
-## Building
+## Troubleshooting
 
-```bash
-npm run build
-node dist/index.js
-```
+**409 Conflict errors**: Fixed by using raw `https.request` polling (in `grinev-runner.cjs`) instead of grammy's built-in polling. Also ensure `TELEGRAM_FORCE_IPV4=true` is set.
+
+**Insufficient Balance**: Top up at your [OpenCode billing page](https://opencode.ai/workspace/wrk_01KVF2HRG3MKQEXQ5YSW6Z10TZ/billing) or switch to a free model via `/model`.
+
+**IPv6 issues**: The VM cannot reach `api.telegram.org` via IPv6. Force IPv4 with `--dns-result-order=ipv4first` and `https.Agent({ family: 4 })`.

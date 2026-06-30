@@ -1,13 +1,14 @@
 {
   "name": "ja-opencode-telegram",
   "version": "3.0.0",
-  "description": "Telegram remote control for OpenCode — chat, switch models, attach files",
+  "description": "Telegram remote for OpenCode \u2014 grinev + custom poll runner",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "start-grinev": "node --dns-result-order=ipv4first grinev-runner.cjs"
   },
   "dependencies": {
     "dotenv": "^16.0.0",
