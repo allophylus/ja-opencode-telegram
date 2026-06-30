@@ -89,8 +89,13 @@ Open Telegram, find your bot, send `/start`. You're connected.
 | `/help` | Command reference |
 | *any text* | Send to OpenCode as prompt |
 
+Model selection:
+- Use `/model` to see current model
+- Use `/models` to list all available models
+- Send `/model <name>` to switch, e.g. `/model deepseek-v4-flash-free`
+
 Model shortcuts:
-- `deepseek-v4-free` → DeepSeek V4 Flash Free
+- `deepseek-v4-flash-free` → DeepSeek V4 Flash Free (recommended free tier)
 - `claude-sonnet` → Claude Sonnet 4
 - `claude-haiku` → Claude Haiku 4.5
 - `gemini-flash` → Gemini 3 Flash

@@ -5,3 +5,4 @@ src/*.js
 !src/*.example.*
 state.json
 bot.lock
+*.log

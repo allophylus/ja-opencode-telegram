@@ -3,7 +3,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
 
-config({ path: join(homedir(), ".config", "opencode", "telegram-remote", ".env") });
+config({ path: join(homedir(), ".config", "opencode", "telegram-remote", ".env"), override: true });
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -13,6 +13,7 @@ export interface AppConfig {
   opencodeUrl: string;
   dataDir: string;
   tmpDir: string;
+  telegramProxyUrl: string | null;
 }
 
 function requireEnv(key: string): string {
@@ -35,6 +36,7 @@ export function loadConfig(): AppConfig {
     opencodeUrl: process.env.OPENCODE_URL || "http://localhost:4096",
     dataDir,
     tmpDir,
+    telegramProxyUrl: process.env.TELEGRAM_PROXY_URL || null,
   };
 }
 

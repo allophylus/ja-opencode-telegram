@@ -15,7 +15,13 @@ interface ChatState {
 
 export async function startBot(config: AppConfig) {
   const oc = createClient(config.opencodeUrl);
-  const bot = new Telegraf(config.botToken);
+  const bot = new Telegraf(config.botToken, {
+    // Use local HTTP proxy to bypass broken IPv6 on this VM
+    // The proxy forwards to api.telegram.org via IPv4 + proper TLS
+    ...(config.telegramProxyUrl
+      ? { handlerTimeout: 30000, telegram: { apiRoot: config.telegramProxyUrl } }
+      : {}),
+  });
 
   // Restore persisted state
   const persisted = readSessionState();
@@ -393,7 +399,7 @@ export async function startBot(config: AppConfig) {
       // Send to OpenCode
       const response2 = await oc.sendMessage(
         state.currentSessionId,
-        [{ type: "user", content: promptText }],
+        [{ type: "text", content: promptText }],
         { model: state.currentModel || undefined, agent: state.defaultAgent }
       );
 
@@ -445,7 +451,7 @@ export async function startBot(config: AppConfig) {
 
       const response2 = await oc.sendMessage(
         state.currentSessionId,
-        [{ type: "user", content: promptText }],
+        [{ type: "text", content: promptText }],
         { model: state.currentModel || undefined, agent: state.defaultAgent }
       );
 
@@ -482,7 +488,7 @@ export async function startBot(config: AppConfig) {
     try {
       const response = await oc.sendMessage(
         state.currentSessionId,
-        [{ type: "user", content: text }],
+        [{ type: "text", content: text }],
         { model: state.currentModel || undefined, agent: state.defaultAgent }
       );
 
@@ -499,9 +505,26 @@ export async function startBot(config: AppConfig) {
     }
   });
 
-  // ─── START POLLING ──────────────────────────────────────────────────
+  // ─── START POLLING (with 409 retry) ──────────────────────────────────
   log("info", "Starting bot", { allowedUsers: config.allowedUserIds, opencodeUrl: config.opencodeUrl });
-  await bot.launch();
+
+  // Drop stale polling sessions before launching
+  try {
+    const dropResp = await fetch(
+      `${config.telegramProxyUrl || "https://api.telegram.org"}/bot${config.botToken}/getUpdates`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ offset: -1, timeout: 0 }) }
+    );
+    const dropResult = await dropResp.json();
+    log("info", "Dropped stale polling", { ok: dropResult.ok });
+  } catch (e) {
+    log("warn", "Failed to drop stale polling", { error: String(e) });
+  }
+
+  // Give Telegram a moment to clean up
+  await new Promise(r => setTimeout(r, 1000));
+
+  // Launch with drop_pending_updates to avoid 409 conflicts
+  await bot.launch({ dropPendingUpdates: true });
   log("info", "Bot launched");
 
   // Graceful shutdown
