@@ -5,6 +5,10 @@
 GRINEV_DIST="/home/fen/.npm-global/lib/node_modules/@grinev/opencode-telegram-bot/dist"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+echo "Adding /thinking command..."
+cp "$SCRIPT_DIR/thinking-command.js" "$GRINEV_DIST/bot/commands/"
+echo "Adding /about command..."
+cp "$SCRIPT_DIR/about-command.js" "$GRINEV_DIST/bot/commands/"
 echo "Adding /model command..."
 cp "$SCRIPT_DIR/model-command.js" "$GRINEV_DIST/bot/commands/"
 cp "$SCRIPT_DIR/definitions.js" "$GRINEV_DIST/bot/commands/"

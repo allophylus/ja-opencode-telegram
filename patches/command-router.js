@@ -19,6 +19,7 @@ import { skillsCommand } from "../commands/skills-catalog-command.js";
 import { mcpsCommand } from "../commands/mcp-catalog-command.js";
 import { modelCommand } from "../commands/model-command.js";
 import { aboutCommand } from "../commands/about-command.js";
+import { thinkingCommand } from "../commands/thinking-command.js";
 import { startCommand } from "../commands/start-command.js";
 import { helpCommand } from "../commands/help-command.js";
 import { statusCommand } from "../commands/status-command.js";
@@ -74,4 +75,5 @@ export function registerCommandRouter(bot, deps) {
     bot.command("mcps", mcpsCommand);
 bot.command("model", modelCommand);
 bot.command("about", aboutCommand);
+bot.command("thinking", thinkingCommand);
 }

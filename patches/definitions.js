@@ -21,6 +21,7 @@ const COMMAND_DEFINITIONS = [
     { command: "mcps", descriptionKey: "cmd.description.mcps" },
     { command: "model", descriptionKey: "cmd.description.model" },
     { command: "about", descriptionKey: "cmd.description.about" },
+    { command: "thinking", descriptionKey: "cmd.description.thinking" },
     { command: "opencode_start", descriptionKey: "cmd.description.opencode_start" },
     { command: "opencode_stop", descriptionKey: "cmd.description.opencode_stop" },
     { command: "open", descriptionKey: "cmd.description.open" },
