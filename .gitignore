@@ -6,3 +6,4 @@ src/*.js
 state.json
 bot.lock
 *.log
+settings.json
