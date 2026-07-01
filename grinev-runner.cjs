@@ -243,6 +243,21 @@ async function main() {
                 return;
             }
 
+            // Providers and their required API key env vars
+            const providerKeys = {
+                'opencode': null,  // free tier available without a key
+                'deepseek': 'DEEPSEEK_API_KEY',
+                'anthropic': 'ANTHROPIC_API_KEY',
+                'openai': 'OPENAI_API_KEY',
+                'google': 'GOOGLE_API_KEY',
+                'openrouter': 'OPENROUTER_API_KEY',
+                'groq': 'GROQ_API_KEY',
+                'together': 'TOGETHER_API_KEY',
+                'cohere': 'COHERE_API_KEY',
+                'xai': 'XAI_API_KEY',
+                'mistral': 'MISTRAL_API_KEY',
+            };
+
             // Group by provider
             const byProvider = {};
             for (const m of catalog) {
@@ -251,8 +266,13 @@ async function main() {
                 byProvider[p].push(m);
             }
 
-            // Build provider buttons in rows of 2
-            const sortedProviders = Object.keys(byProvider).sort();
+            // Filter to only providers with API keys configured (or free tier)
+            const sortedProviders = Object.keys(byProvider).sort().filter(p => {
+                const keyVar = providerKeys[p];
+                if (keyVar === null) return true;  // free tier, always show
+                if (keyVar && process.env[keyVar]) return true;  // has API key
+                return false;  // no key configured -> hide
+            });
             const providerButtons = [];
             for (let i = 0; i < sortedProviders.length; i += 2) {
                 const row = [
