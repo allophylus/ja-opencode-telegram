@@ -197,6 +197,251 @@ async function main() {
     await bot.init();
     console.log('[BOT] @' + bot.botInfo.username + ' (id=' + bot.botInfo.id + ')');
 
+    // 4a. /model command handler — set model from Telegram
+    const ALLOWED_USER_IDS = (process.env.TELEGRAM_ALLOWED_USER_ID || '').split(',').filter(Boolean);
+    function isAllowedUser(userId) {
+        return ALLOWED_USER_IDS.length === 0 || ALLOWED_USER_IDS.includes(String(userId));
+    }
+
+    // Load model utilities
+    const { getCurrentModel, setCurrentModel } = require(path.join(DIST, 'app/stores/settings-store.js'));
+    const MODEL_CATALOG_PATH = '/home/fen/.cache/opencode/models.json';
+    function readModelCatalog() {
+        try {
+            const content = require('fs').readFileSync(MODEL_CATALOG_PATH, 'utf-8');
+            const raw = JSON.parse(content);
+            const models = [];
+            for (const [providerID, info] of Object.entries(raw)) {
+                if (info.models) {
+                    for (const [modelID, m] of Object.entries(info.models)) {
+                        models.push({ providerID, modelID, name: m.name || modelID });
+                    }
+                }
+            }
+            return models;
+        } catch (e) {
+            console.warn('[MODEL] Failed to read catalog:', e.message);
+            return null;
+        }
+    }
+
+    /**
+     * Handle /model command
+     */
+    async function handleModelCommand(chatId, args, messageId) {
+        const current = getCurrentModel();
+
+        // /model list — show all available models via inline keyboard
+        if (args === 'list') {
+            const catalog = readModelCatalog();
+            if (!catalog || catalog.length === 0) {
+                await tgApiCall('sendMessage', {
+                    chat_id: chatId,
+                    text: '⚠️ No models available from catalog.',
+                    reply_to_message_id: messageId,
+                });
+                return;
+            }
+
+            // Group by provider
+            const byProvider = {};
+            for (const m of catalog) {
+                const p = m.providerID || 'unknown';
+                if (!byProvider[p]) byProvider[p] = [];
+                byProvider[p].push(m);
+            }
+
+            // Build provider buttons in rows of 2
+            const sortedProviders = Object.keys(byProvider).sort();
+            const providerButtons = [];
+            for (let i = 0; i < sortedProviders.length; i += 2) {
+                const row = [
+                    { text: sortedProviders[i], callback_data: 'model_provider:' + sortedProviders[i] }
+                ];
+                if (sortedProviders[i + 1]) {
+                    row.push({ text: sortedProviders[i + 1], callback_data: 'model_provider:' + sortedProviders[i + 1] });
+                }
+                providerButtons.push(row);
+            }
+
+            await tgApiCall('sendMessage', {
+                chat_id: chatId,
+                text: '📋 *Available Providers*\nCurrent: `' + (current ? current.providerID + '/' + current.modelID : 'none') + '`\nSelect a provider:',
+                parse_mode: 'Markdown',
+                reply_markup: JSON.stringify({
+                    inline_keyboard: providerButtons
+                }),
+            });
+            return;
+        }
+
+        // If specific model key provided (e.g. /model deepseek/deepseek-v4-flash)
+        if (args && args.includes('/')) {
+            const parts = args.split('/');
+            const providerID = parts[0];
+            const modelID = parts.slice(1).join('/');
+
+            setCurrentModel({ providerID, modelID });
+            try { await reconcileStoredModelSelection({ force: true }); } catch (e) { /* ok */ }
+
+            await tgApiCall('sendMessage', {
+                chat_id: chatId,
+                text: '✅ Model set to `' + providerID + '/' + modelID + '`',
+                parse_mode: 'Markdown',
+                reply_to_message_id: messageId,
+            });
+            return;
+        }
+
+        // /model with no args — show popular choices
+        const catalog = readModelCatalog();
+        const currentKey = current ? current.providerID + '/' + current.modelID : 'none';
+
+        // Curated quick-select models (filtered by catalog availability)
+        const quickModels = [
+            'deepseek/deepseek-v4-flash',
+            'deepseek/deepseek-reasoner',
+            'deepseek/deepseek-v4-pro',
+            'opencode/deepseek-v4-flash',
+            'opencode/deepseek-v4-flash-free',
+            'opencode/kimi-k2.5-free',
+            'opencode/glm-4.7-free',
+            'opencode/gpt-5.4-nano',
+            'opencode/claude-haiku-4-5',
+        ].filter(key => catalog ? catalog.some(m => (m.providerID + '/' + m.modelID) === key) : true);
+
+        const rows = [];
+        for (const key of quickModels) {
+            const label = key.includes('free') ? key.split('/')[1] + ' 🆓' : key.split('/')[1];
+            if (rows.length === 0 || rows[rows.length - 1].length >= 2) rows.push([]);
+            rows[rows.length - 1].push({ text: label, callback_data: 'model_set:' + key });
+        }
+        rows.push([{ text: '📋 All providers', callback_data: 'model_list' }]);
+
+        await tgApiCall('sendMessage', {
+            chat_id: chatId,
+            text: '🤖 *Select Model*\nCurrent: `' + currentKey + '`',
+            parse_mode: 'Markdown',
+            reply_markup: JSON.stringify({ inline_keyboard: rows }),
+        });
+    }
+
+    /**
+     * Handle model-related callback queries
+     */
+    async function handleModelCallback(chatId, messageId, callbackData) {
+        if (callbackData === 'model_list') {
+            // Same as /model list
+            return handleModelCommand(chatId, 'list', messageId);
+        }
+
+        if (callbackData.startsWith('model_provider:')) {
+            const providerID = callbackData.split(':')[1];
+            const catalog = readModelCatalog();
+            const models = (catalog || []).filter(m => m.providerID === providerID);
+
+            const rows = [];
+            for (const m of models) {
+                const key = m.providerID + '/' + m.modelID;
+                const label = m.modelID.length > 30 ? m.modelID.slice(0, 28) + '…' : m.modelID;
+                if (rows.length === 0 || rows[rows.length - 1].length >= 2) rows.push([]);
+                rows[rows.length - 1].push({ text: label, callback_data: 'model_set:' + key });
+            }
+            rows.push([{ text: '⬅ Back', callback_data: 'model_list' }]);
+
+            await tgApiCall('editMessageText', {
+                chat_id: chatId,
+                message_id: messageId,
+                text: '📋 *' + providerID.toUpperCase() + '* models',
+                parse_mode: 'Markdown',
+                reply_markup: JSON.stringify({ inline_keyboard: rows }),
+            });
+            return;
+        }
+
+        if (callbackData.startsWith('model_set:')) {
+            const key = callbackData.split(':').slice(1).join(':');
+            const parts = key.split('/');
+            const providerID = parts[0];
+            const modelID = parts.slice(1).join('/');
+
+            setCurrentModel({ providerID, modelID });
+            try { await reconcileStoredModelSelection({ force: true }); } catch (e) { /* ok */ }
+
+            await tgApiCall('editMessageText', {
+                chat_id: chatId,
+                message_id: messageId,
+                text: '✅ Model set to `' + providerID + '/' + modelID + '`',
+                parse_mode: 'Markdown',
+            });
+
+            // Send a confirmation as a new message too
+            await tgApiCall('sendMessage', {
+                chat_id: chatId,
+                text: '✅ Switched to `' + providerID + '/' + modelID + '`',
+                parse_mode: 'Markdown',
+            });
+            return;
+        }
+    }
+
+    /**
+     * Pre-process updates to handle /model commands and callbacks
+     */
+    async function preProcessUpdates(updates) {
+        const handled = [];
+        for (const update of updates) {
+            let intercepted = false;
+
+            // Text messages starting with /model
+            if (update.message?.text?.startsWith('/model')) {
+                const userId = String(update.message.from?.id);
+                if (!isAllowedUser(userId)) {
+                    console.log('[MODEL] Unauthorized user:', userId);
+                    continue;
+                }
+                const chatId = update.message.chat.id;
+                const messageId = update.message.message_id;
+                const args = update.message.text.slice('/model'.length).trim();
+
+                console.log('[MODEL] Command from user ' + userId + ': ' + (args || '(no args)'));
+                await handleModelCommand(chatId, args, messageId);
+                intercepted = true;
+            }
+
+            // Callback queries starting with model_
+            if (update.callback_query?.data?.startsWith('model_')) {
+                const userId = String(update.callback_query.from?.id);
+                if (!isAllowedUser(userId)) {
+                    console.log('[MODEL] Unauthorized callback:', userId);
+                    await tgApiCall('answerCallbackQuery', {
+                        callback_query_id: update.callback_query.id,
+                        text: '❌ Not authorized',
+                    });
+                    continue;
+                }
+
+                const chatId = update.callback_query.message.chat.id;
+                const messageId = update.callback_query.message.message_id;
+                const callbackData = update.callback_query.data;
+
+                console.log('[MODEL] Callback: ' + callbackData);
+                await handleModelCallback(chatId, messageId, callbackData);
+
+                // Answer the callback to dismiss the loading state
+                await tgApiCall('answerCallbackQuery', {
+                    callback_query_id: update.callback_query.id,
+                });
+                intercepted = true;
+            }
+
+            if (!intercepted) {
+                handled.push(update);
+            }
+        }
+        return handled;
+    }
+
     // 5. Initialize scheduled task runtime
     try {
         await scheduledTaskRuntime.initialize(bot, {});
@@ -280,13 +525,18 @@ async function main() {
                 offset = updates[updates.length - 1].update_id + 1;
                 lastUpdateTime = Date.now();
 
-                // Process through grammy's middleware
-                console.log('[UPDATE] Processing ' + updates.length + ' update(s)');
-                try {
-                    await bot.handleUpdates(updates);
-                } catch (handlerError) {
-                    console.error('[HANDLE] Error processing updates:', handlerError.message);
-                    // Don't crash — continue polling
+                // Pre-process for model commands, pass rest to grammy
+                const filtered = await preProcessUpdates(updates);
+                if (filtered.length > 0) {
+                    console.log('[UPDATE] Processing ' + filtered.length + ' update(s) (skipped ' + (updates.length - filtered.length) + ')');
+                    try {
+                        await bot.handleUpdates(filtered);
+                    } catch (handlerError) {
+                        console.error('[HANDLE] Error processing updates:', handlerError.message);
+                        // Don't crash — continue polling
+                    }
+                } else {
+                    console.log('[UPDATE] All ' + updates.length + ' update(s) intercepted by pre-processor');
                 }
             }
 
