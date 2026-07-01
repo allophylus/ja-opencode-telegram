@@ -312,7 +312,11 @@ async function main() {
 
         const rows = [];
         for (const key of quickModels) {
-            const label = key.includes('free') ? key.split('/')[1] + ' 🆓' : key.split('/')[1];
+            const [provider, ...rest] = key.split('/');
+            const modelName = rest.join('/');
+            const label = key.includes('free')
+                ? provider.slice(0, 3) + '/' + modelName + ' 🆓'
+                : provider.slice(0, 3) + '/' + modelName;
             if (rows.length === 0 || rows[rows.length - 1].length >= 2) rows.push([]);
             rows[rows.length - 1].push({ text: label, callback_data: 'model_set:' + key });
         }
