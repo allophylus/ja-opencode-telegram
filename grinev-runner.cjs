@@ -293,41 +293,8 @@ async function main() {
             return;
         }
 
-        // /model with no args — show popular choices
-        const catalog = readModelCatalog();
-        const currentKey = current ? current.providerID + '/' + current.modelID : 'none';
-
-        // Curated quick-select models (filtered by catalog availability)
-        const quickModels = [
-            'deepseek/deepseek-v4-flash',
-            'deepseek/deepseek-reasoner',
-            'deepseek/deepseek-v4-pro',
-            'opencode/deepseek-v4-flash',
-            'opencode/deepseek-v4-flash-free',
-            'opencode/kimi-k2.5-free',
-            'opencode/glm-4.7-free',
-            'opencode/gpt-5.4-nano',
-            'opencode/claude-haiku-4-5',
-        ].filter(key => catalog ? catalog.some(m => (m.providerID + '/' + m.modelID) === key) : true);
-
-        const rows = [];
-        for (const key of quickModels) {
-            const [provider, ...rest] = key.split('/');
-            const modelName = rest.join('/');
-            const label = key.includes('free')
-                ? provider.slice(0, 3) + '/' + modelName + ' 🆓'
-                : provider.slice(0, 3) + '/' + modelName;
-            if (rows.length === 0 || rows[rows.length - 1].length >= 2) rows.push([]);
-            rows[rows.length - 1].push({ text: label, callback_data: 'model_set:' + key });
-        }
-        rows.push([{ text: '📋 All providers', callback_data: 'model_list' }]);
-
-        await tgApiCall('sendMessage', {
-            chat_id: chatId,
-            text: '🤖 *Select Model*\nCurrent: `' + currentKey + '`',
-            parse_mode: 'Markdown',
-            reply_markup: JSON.stringify({ inline_keyboard: rows }),
-        });
+        // /model with no args — show providers first (clean two-step flow)
+        return handleModelCommand(chatId, 'list', messageId);
     }
 
     /**
