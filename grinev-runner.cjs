@@ -226,6 +226,35 @@ async function main() {
     }
 
     /**
+     * Fetch connected providers from the running opencode server
+     */
+    async function fetchConnectedProviders() {
+        const http = require('http');
+        return new Promise((resolve) => {
+            const req = http.get('http://127.0.0.1:4096/provider', { timeout: 5000 }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(data);
+                        // The response has a "connected" array at the root showing
+                        // which providers have working API keys configured
+                        if (Array.isArray(parsed.connected)) {
+                            resolve(new Set(parsed.connected));
+                        } else {
+                            resolve(null);
+                        }
+                    } catch (e) {
+                        resolve(null);
+                    }
+                });
+            });
+            req.on('error', () => resolve(null));
+            req.end();
+        });
+    }
+
+    /**
      * Handle /model command
      */
     async function handleModelCommand(chatId, args, messageId) {
@@ -243,20 +272,8 @@ async function main() {
                 return;
             }
 
-            // Providers and their required API key env vars
-            const providerKeys = {
-                'opencode': null,  // free tier available without a key
-                'deepseek': 'DEEPSEEK_API_KEY',
-                'anthropic': 'ANTHROPIC_API_KEY',
-                'openai': 'OPENAI_API_KEY',
-                'google': 'GOOGLE_API_KEY',
-                'openrouter': 'OPENROUTER_API_KEY',
-                'groq': 'GROQ_API_KEY',
-                'together': 'TOGETHER_API_KEY',
-                'cohere': 'COHERE_API_KEY',
-                'xai': 'XAI_API_KEY',
-                'mistral': 'MISTRAL_API_KEY',
-            };
+            // Fetch connected providers from the running opencode server
+            const connectedProviders = await fetchConnectedProviders();
 
             // Group by provider
             const byProvider = {};
@@ -266,12 +283,9 @@ async function main() {
                 byProvider[p].push(m);
             }
 
-            // Filter to only providers with API keys configured (or free tier)
+            // Filter to only providers connected via opencode (have API keys configured)
             const sortedProviders = Object.keys(byProvider).sort().filter(p => {
-                const keyVar = providerKeys[p];
-                if (keyVar === null) return true;  // free tier, always show
-                if (keyVar && process.env[keyVar]) return true;  // has API key
-                return false;  // no key configured -> hide
+                return connectedProviders && connectedProviders.has(p);
             });
             const providerButtons = [];
             for (let i = 0; i < sortedProviders.length; i += 2) {
