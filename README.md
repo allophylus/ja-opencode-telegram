@@ -69,43 +69,32 @@ Edit `~/.config/opencode-telegram-bot/.env`:
 TELEGRAM_BOT_TOKEN=*** bot token from BotFather>
 TELEGRAM_ALLOWED_USER_IDS=<your numeric user ID>
 OPENCODE_API_URL=http://localhost:4096
-OPENCODE_MODEL_PROVIDER=opencode
-OPENCODE_MODEL_ID=deepseek-v4-flash-free
+OPENCODE_MODEL_PROVIDER=deepseek
+OPENCODE_MODEL_ID=deepseek-v4-flash
+DEEPSEEK_API_KEY=***sk-...***
 TELEGRAM_FORCE_IPV4=true
 OPENCODE_AUTO_RESTART_ENABLED=false
 ```
 
-### 6. Apply patches (adds `/model` and `/about` commands)
+### 6. Run (auto-starts OpenCode)
+
+The bot auto-starts `opencode serve --port 4096` — no separate terminal needed.
 
 ```bash
-cd ja-opencode-telegram
-bash patches/apply.sh
-```
-
-### 7. Start OpenCode server (separate terminal)
-
-```bash
-opencode serve --port 4096
-```
-
-### 8. Run the bot
-
-```bash
-cd ja-opencode-telegram
 node --dns-result-order=ipv4first grinev-runner.cjs
 ```
 
-Or via the start script:
+Or via systemd:
 
 ```bash
-./start.sh
+systemctl --user start ja-opencode-telegram
 ```
 
-### 9. Test
+### 7. Test
 
 - Open Telegram, find your bot
 - Send `/start` — registers commands in your chat
-- Type `/` — you should see all commands including `/model` and `/about`
+- Send `/model` — try the two-step model selection
 
 ## Commands
 
@@ -123,13 +112,37 @@ Or via the start script:
 
 ## Model Selection
 
-Send `/model` to see the current model and pick a new one from favorites/recent, or search all available models.
+Send `/model` for two-step selection:
+1. Pick a **provider** (deepseek, opencode, openrouter, etc.)
+2. Pick a **model** from that provider
 
-Free models available:
-- `deepseek-v4-flash-free`
-- `mimo-v2.5-free`
-- `nemotron-3-ultra-free`
-- `north-mini-code-free`
+The setting takes effect immediately — no restart needed.
+
+**Quick set** (power users):
+```
+/model deepseek/deepseek-v4-flash
+/model deepseek/deepseek-reasoner
+/model opencode/claude-haiku-4-5
+```
+
+### Model config sources (priority order):
+| Source | File |
+|--------|------|
+| 1. Runtime setting (via `/model`) | `settings.json` (auto-generated) |
+| 2. Env var defaults | `~/.config/opencode-telegram-bot/.env` |
+| 3. OpenCode config | `~/.config/opencode/opencode.json` |
+
+### Required env vars for each provider:
+
+| Provider | Env var |
+|----------|--------|
+| `deepseek` | `DEEPSEEK_API_KEY` |
+| `opencode` (free) | None (but limited) |
+| `opencode` (Go) | `OPENCODE_GO_API_KEY` |
+
+**Important:** The DeepSeek API key must be in the systemd env file
+(`~/.config/opencode-telegram-bot/.env`) — setting it only in `.bashrc`
+won't work since systemd services don't source shell rc files.
 
 ## Auto-Start on Reboot
 
@@ -157,6 +170,11 @@ Service file is in the `systemd/` directory.
 (in `grinev-runner.cjs`) instead of grammy's built-in polling. Also
 ensure `TELEGRAM_FORCE_IPV4=true` is set.
 
+**Model not found errors**: If OpenCode can't find a model:
+1. Ensure the API key for that provider is set in `~/.config/opencode-telegram-bot/.env`
+2. Restart the service: `systemctl --user restart ja-opencode-telegram`
+3. Try `/model <provider>/<model>` directly
+
 **Insufficient Balance**: Top up at your OpenCode billing page or
 switch to a free model via `/model`.
 
@@ -168,10 +186,7 @@ Force IPv4 with `--dns-result-order=ipv4first` and
 
 ```
 ja-opencode-telegram/
-├── grinev-runner.cjs    ← Bot wrapper (raw polling, auto-starts opencode)
-├── patches/             ← /model + /about command patches
-│   ├── apply.sh
-│   └── *.js
+├── grinev-runner.cjs    ← Bot wrapper (raw polling, auto-starts opencode, /model command)
 ├── systemd/             ← Systemd service file
 ├── telegram-proxy.cjs   ← IPv4 proxy (alternative approach)
 ├── .env.example         ← Config template
