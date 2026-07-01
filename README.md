@@ -1,6 +1,6 @@
-# JA OpenCode Telegram 🤖
+# Just Another OpenCode Telegram 🤖
 
-Chat with OpenCode from Telegram using the **grinev** bot wrapper with a custom IPv4-safe polling loop.
+Chat with OpenCode from Telegram. Uses a lightweight polling loop — no webhooks, no public endpoints, IPv4-safe.
 
 ## How it works
 

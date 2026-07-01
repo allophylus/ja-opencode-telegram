@@ -1,7 +1,7 @@
 {
   "name": "ja-opencode-telegram",
   "version": "3.0.0",
-  "description": "Telegram remote for OpenCode \u2014 grinev + custom poll runner",
+  "description": "Just Another Telegram remote for OpenCode — chat with your AI coding agent from Telegram",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
