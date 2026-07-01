@@ -15,5 +15,10 @@
   "currentAgent": "build",
   "compactOutputMode": false,
   "sendDiffFileAttachments": false,
-  "showThinkingContent": false
+  "showThinkingContent": false,
+  "currentModel": {
+    "providerID": "deepseek",
+    "modelID": "deepseek-v4-flash",
+    "variant": "default"
+  }
 }
