@@ -86,6 +86,124 @@ let cleanupBotRuntime = null;
 let heartbeatTimer = null;
 let opencodeProcess = null;
 
+// ── Prompt queueing (queue messages that arrive while agent is busy) ────
+// When a text prompt is sent while the agent session is running a task, instead of
+// replying "already running", we store it and auto-submit it once the agent goes idle.
+const queuedPrompts = [];      // [{chatId, text, ts, notifyMsgId}]
+let queuedFlushTimer = null;
+let queuedBusyCheck = null;
+
+const OPENCODE_HTTP = 'http://127.0.0.1:4096';
+
+async function isSessionBusy() {
+    // Ask OpenCode server which sessions are currently streaming/active
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 2500);
+        const resp = await fetch(OPENCODE_HTTP + '/session', { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!resp.ok) return false;
+        const sessions = await resp.json();
+        if (!Array.isArray(sessions) || sessions.length === 0) return false;
+        // A session is "busy" if it has a running/streaming status
+        return sessions.some((s) =>
+            s && (s.status === 'streaming' || s.status === 'running' || s.status === 'pending' || s.running === true)
+        );
+    } catch (e) {
+        return false; // server unreachable — assume not busy
+    }
+}
+
+function sendQueuedAck(bot, chatId, text, position) {
+    // Send a lightweight "queued" reply so the user knows it's accepted
+    const short = text.length > 60 ? text.slice(0, 57) + '...' : text;
+    const suffix = position > 1 ? ` (position ${position} in queue)` : '';
+    bot.api.sendMessage(chatId,
+        `⏳ Agent is busy — your message is queued${suffix}.\n\n"${short}"\n\nIt will be sent automatically when the current task finishes.`)
+        .catch(() => {});
+}
+
+async function flushQueuedPrompts(bot) {
+    if (queuedFlushTimer) return; // already flushing
+    queuedFlushTimer = true;
+    try {
+        while (queuedPrompts.length > 0 && !(await isSessionBusy())) {
+            const item = queuedPrompts.shift();
+            if (!item || !bot) continue;
+            console.log('[QUEUE] Dispatching queued prompt: ' + (item.text || '').slice(0, 60));
+            // Acknowledge dispatch
+            bot.api.sendMessage(item.chatId, '▶️ Running your queued message now:')
+                .catch(() => {});
+            // Replay the message through the bot's normal update handling.
+            // We simulate a Telegram message update so all middleware/handlers apply.
+            const fakeUpdate = {
+                update_id: Date.now() | 0,
+                message: {
+                    message_id: Math.floor(Math.random() * 1e9),
+                    from: { id: item.userId || 0, is_bot: false, first_name: 'Queued' },
+                    chat: { id: item.chatId, type: 'private', first_name: 'Queued' },
+                    date: Math.floor(Date.now() / 1000),
+                    text: item.text,
+                },
+            };
+            try {
+                await bot.handleUpdates([fakeUpdate]);
+            } catch (e) {
+                console.error('[QUEUE] Error dispatching queued prompt:', e.message);
+            }
+            await new Promise((r) => setTimeout(r, 1500));
+        }
+    } finally {
+        queuedFlushTimer = null;
+    }
+}
+
+function scheduleQueueFlush(bot) {
+    if (queuedFlushTimer) return;
+    // Poll the server every 5s until queue empties
+    queuedBusyCheck = setInterval(() => {
+        if (queuedPrompts.length === 0) {
+            clearInterval(queuedBusyCheck);
+            queuedBusyCheck = null;
+            return;
+        }
+        flushQueuedPrompts(bot).catch((e) => console.error('[QUEUE] flush error:', e.message));
+    }, 5000);
+}
+
+function enqueuePrompt(bot, ctx) {
+    const chatId = ctx.chat?.id;
+    const text = (ctx.message?.text || '').trim();
+    const userId = ctx.from?.id;
+    if (chatId === undefined || !text) return;
+    queuedPrompts.push({ chatId, text, userId, ts: Date.now() });
+    console.log('[QUEUE] Enqueued prompt (busy): ' + text.slice(0, 60) + ' — queue size ' + queuedPrompts.length);
+    sendQueuedAck(bot, chatId, text, queuedPrompts.length);
+    scheduleQueueFlush(bot);
+}
+
+function wrapPromptQueueing(bot) {
+    const originalHandle = bot.handleUpdates.bind(bot);
+    bot.handleUpdates = async (updates) => {
+        // First, intercept any text prompts that arrive while the agent is busy.
+        const busy = await isSessionBusy();
+        const replay = [];
+        for (const u of updates || []) {
+            const text = u.message?.text;
+            const isCommand = typeof text === 'string' && text.trim().startsWith('/');
+            // Queue only plain text prompts while busy (not commands like /status, /abort, /detach)
+            if (busy && typeof text === 'string' && text.trim() && !isCommand) {
+                enqueuePrompt(bot, { chat: { id: u.message.chat.id }, message: { text }, from: { id: u.message.from?.id } });
+            } else {
+                replay.push(u);
+            }
+        }
+        if (replay.length > 0) {
+            await originalHandle(replay);
+        }
+    };
+}
+
 // ── Ensure OpenCode server is running ────────────────────────────────
 async function ensureOpencodeServer() {
     // Check if already running on port 4096
@@ -196,6 +314,14 @@ async function main() {
     const bot = grinevIndex.createBot();
     await bot.init();
     console.log('[BOT] @' + bot.botInfo.username + ' (id=' + bot.botInfo.id + ')');
+
+    // 4.5 Enable prompt queueing (queue prompts sent while busy)
+    try {
+        wrapPromptQueueing(bot);
+        console.log('[QUEUE] Prompt queueing enabled');
+    } catch (e) {
+        console.warn('[QUEUE] Could not enable queueing:', e.message);
+    }
 
     // 5. Initialize scheduled task runtime
     try {
