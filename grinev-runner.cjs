@@ -96,19 +96,30 @@ let queuedBusyCheck = null;
 const OPENCODE_HTTP = 'http://127.0.0.1:4096';
 
 async function isSessionBusy() {
-    // Ask OpenCode server which sessions are currently streaming/active
+    // Ask OpenCode server which sessions are currently streaming/active.
+    // The /session list does NOT carry a status field; real busy state lives in
+    // /session/status?directory=... -> { [sessionId]: { type: "busy"|"idle"|... } }.
     try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 2500);
-        const resp = await fetch(OPENCODE_HTTP + '/session', { signal: ctrl.signal });
+        // Resolve the current session + its directory from the runtime settings
+        // (same store grinev's settings-store uses), defaulting to "/".
+        let dir = '/', sessionId = null;
+        try {
+            const st = JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf-8'));
+            if (st && st.currentSession) {
+                if (st.currentSession.directory) dir = st.currentSession.directory;
+                if (st.currentSession.id) sessionId = st.currentSession.id;
+            }
+        } catch (e) { /* settings unreadable — fall back to directory "/" */ }
+        const resp = await fetch(OPENCODE_HTTP + '/session/status?directory=' + encodeURIComponent(dir), { signal: ctrl.signal });
         clearTimeout(t);
         if (!resp.ok) return false;
-        const sessions = await resp.json();
-        if (!Array.isArray(sessions) || sessions.length === 0) return false;
-        // A session is "busy" if it has a running/streaming status
-        return sessions.some((s) =>
-            s && (s.status === 'streaming' || s.status === 'running' || s.status === 'pending' || s.running === true)
-        );
+        const statuses = await resp.json(); // { [sessionId]: { type } }
+        if (!statuses || typeof statuses !== 'object') return false;
+        const busy = (st) => st && (st.type === 'busy' || st.type === 'streaming' || st.type === 'running' || st.type === 'pending');
+        if (sessionId && statuses[sessionId]) return busy(statuses[sessionId]);
+        return Object.values(statuses).some(busy);
     } catch (e) {
         return false; // server unreachable — assume not busy
     }
